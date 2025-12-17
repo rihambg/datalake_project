@@ -13,7 +13,7 @@ services:
       - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
       - ./data:/opt/data:ro
     ports:
-      - "9870:9870"   # HDFS NameNode web UI
+      - "50070:50070"   # HDFS NameNode web UI
       - "9000:9000"   # HDFS RPC
     networks:
       - datalake-net
