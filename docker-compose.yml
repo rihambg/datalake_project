@@ -1,0 +1,106 @@
+services:
+  namenode:
+    image: bde2020/hadoop-namenode:2.0.0-hadoop2.7.4-java8
+    container_name: namenode
+    hostname: namenode
+    environment:
+      - CLUSTER_NAME=mini-datalake
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_namenode_name_dir=/hadoop/dfs/name
+    volumes:
+      - namenode_data:/hadoop/dfs/name
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./data:/opt/data:ro
+    ports:
+      - "50070:50070"   # HDFS NameNode web UI
+      - "9000:9000"   # HDFS RPC
+    networks:
+      - datalake-net
+
+  datanode:
+    image: bde2020/hadoop-datanode:2.0.0-hadoop2.7.4-java8
+    container_name: datanode
+    hostname: datanode
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+      - HDFS_CONF_dfs_datanode_data_dir=/hadoop/dfs/data
+    volumes:
+      - datanode_data:/hadoop/dfs/data
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+    depends_on:
+      - namenode
+    networks:
+      - datalake-net
+
+  spark-master:
+    image: bde2020/spark-master:2.4.0-hadoop2.7
+    container_name: spark-master
+    hostname: spark-master
+    environment:
+      - ENABLE_INIT_DAEMON=false
+      - HADOOP_CONF_DIR=/etc/hadoop
+      - SPARK_MODE=master
+    volumes:
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./spark/spark-env.sh:/spark-conf/spark-env.sh:ro
+      - ./jobs:/opt/spark/jobs:ro
+    ports:
+      - "8080:8080"   # Spark Master UI
+      - "7077:7077"   # Spark master (spark://)
+    depends_on:
+      - namenode
+    networks:
+      - datalake-net
+
+  spark-worker:
+    image: bde2020/spark-worker:2.4.0-hadoop2.7
+    container_name: spark-worker
+    hostname: spark-worker
+    environment:
+      - ENABLE_INIT_DAEMON=false
+      - HADOOP_CONF_DIR=/etc/hadoop
+      - SPARK_MODE=worker
+      - SPARK_MASTER=spark://spark-master:7077
+    volumes:
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./spark/spark-env.sh:/spark-conf/spark-env.sh:ro
+      - ./jobs:/opt/spark/jobs:ro
+    depends_on:
+      - spark-master
+      - namenode
+    networks:
+      - datalake-net
+
+  hadoop-client:
+    image: bde2020/hadoop-base:2.0.0-hadoop2.7.4-java8
+    container_name: hadoop-client
+    hostname: hadoop-client
+    tty: true
+    stdin_open: true
+    # keep the client container alive so we can exec into it
+    command: ["bash", "-c", "tail -f /dev/null"]
+    environment:
+      - CORE_CONF_fs_defaultFS=hdfs://namenode:9000
+    volumes:
+      - ./hadoop/core-site.xml:/etc/hadoop/core-site.xml:ro
+      - ./hadoop/hdfs-site.xml:/etc/hadoop/hdfs-site.xml:ro
+      - ./scripts:/opt/scripts:ro
+      - ./data:/opt/data:ro
+      - ./jobs:/opt/jobs:ro
+    depends_on:
+      - namenode
+      - datanode
+    networks:
+      - datalake-net
+
+volumes:
+  namenode_data:
+  datanode_data:
+
+networks:
+  datalake-net:
+    driver: bridge
